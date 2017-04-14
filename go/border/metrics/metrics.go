@@ -46,6 +46,8 @@ var (
 	OutputLoops       *prometheus.CounterVec
 	InputProcessTime  *prometheus.CounterVec
 	OutputProcessTime *prometheus.CounterVec
+	PktsDropPerAs     *prometheus.CounterVec
+	CurBwPerAs        *prometheus.GaugeVec
 )
 
 // Ensure all metrics are registered.
@@ -89,6 +91,8 @@ func Init(elem string) {
 	OutputLoops = newCVec("output_loops", "Number of output loop runs.", sockLabels)
 	InputProcessTime = newCVec("input_process_seconds", "Input processing time.", sockLabels)
 	OutputProcessTime = newCVec("output_process_seconds", "Output processing time.", sockLabels)
+	PktsDropPerAs = newCVec("pkts_drop_per_as", "Number of packets dropped due to bandwidth enforcement.", []string{"sock", "type"})
+	CurBwPerAs = newGVec("bandwidth_per_as", "Current bandwidth of an AS if the AS is overshooting.", []string{"sock", "type"})
 
 	// Initialize ringbuf metrics.
 	ringbuf.InitMetrics("border", constLabels, []string{"ringId"})

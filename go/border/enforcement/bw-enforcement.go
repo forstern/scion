@@ -39,6 +39,11 @@ type BWEnforcer struct {
 type IFEContainer struct {
 	// avgs holds all averages associated to an AS.
 	avgs map[uint32]*ASEInformation
+	// maxIfBw indicates the maximum bandwidth for the interface
+	// either ingress or egress
+	maxIfBw int64
+	// usedIfBw holds the currently used BW by all reserved ASes.
+	usedIfBw int64
 	//unknown holds the current average for unknown ASes.
 	unknown ASEInformation
 }
@@ -50,6 +55,8 @@ type ASEInformation struct {
 	maxBw int64
 	// alertBW indicates the bandwidth that is used for alerting. currently it is set to 95%.
 	alertBW int64
+	// curBw holds the current used BW of the AS.
+	curBw int64
 	// movAvg holds the current bandwidth average of the AS.
 	movAvg *MovingAverage
 	// Labels holds the prometheus labels of the AS.

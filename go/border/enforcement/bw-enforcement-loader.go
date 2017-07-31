@@ -129,7 +129,7 @@ func (ifConfigs *IfConfigs) toIngressContainer() map[common.IFIDType]IFEContaine
 }
 
 func mapToContainer(config map[string]int64, ifid common.IFIDType, typ string) (IFEContainer, int64) {
-	maxUnknownBW := int64(-1)
+	maxUnknownBW := int64(0)
 	reservedBW := int64(0)
 	avgs := make(map[uint32]*ASEInformation)
 

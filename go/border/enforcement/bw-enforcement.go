@@ -77,7 +77,7 @@ func (bwe *BWEnforcer) Check(rp *rpkt.RtrPkt) bool {
 
 // canForward() indicates whether a packet is allowed to pass the router. It is not if
 // the AS exceeds its bandwidth limit.
-func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
+func (ifec *IFEContainer) canForward2(isdas *addr.ISD_AS, length int) bool {
 	info := ifec.getBWInfo(*isdas)
 	labels := info.Labels
 
@@ -93,12 +93,40 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 
 	avg := info.getAvg()
 	if avg < info.maxBw {
-		info.addPktToAvg(length)
+		info.addPktToAvg2(length)
 		if avg > info.alertBW {
 			metrics.CurBwPerAs.With(labels).Set(float64(avg))
 		}
 
 		return true
+	}
+
+	metrics.CurBwPerAs.With(labels).Set(float64(avg))
+	metrics.PktsDropPerAs.With(labels).Inc()
+	return false
+}
+
+// canForward() indicates whether a packet is allowed to pass the router. It is not if
+// the AS exceeds its bandwidth limit.
+func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
+	asInfo, exists := ifec.getBWInfo(*isdas)
+	if exists {
+		oldAsBw, curAsBw := asInfo.getAvgs(false)
+		if curAsBw < asInfo.maxBw {
+			asInfo.addPktToAvg(length, false)
+			ifec.usedIfBw -= oldAsBw
+			ifec.usedIfBw += curAsBw
+			return true
+		}
+	} else {
+		_, curAsBw := asInfo.getAvgs(true)
+		freeIfBw := ifec.maxIfBw - ifec.usedIfBw
+		// 0.75 * maxIFBw && (curAsBw < maxAsBw || curAsBw < freeIfBw )
+		flag := (curAsBw < (ifec.maxIfBw >> 1 + ifec.maxIfBw >> 2)) && (curAsBw < asInfo.maxBw || curAsBw < freeIfBw)
+		if flag {
+			asInfo.addPktToAvg(length, true)
+			return true
+		}
 	}
 
 	metrics.CurBwPerAs.With(labels).Set(float64(avg))
@@ -121,7 +149,23 @@ func (info *ASEInformation) getAvg() int64 {
 	return info.movAvg.getAverage() * 8
 }
 
+func (info *ASEInformation) getAvgs(unknown bool) (int64, int64) {
+	if !unknown && info.maxBw == 0 {
+		return 0, 0
+	}
+	oldBw := info.curBw
+	info.curBw = info.movAvg.getAverage() * 8
+	return oldBw, info.curBw
+}
+
+// addPktToAvg() adds the packet to the moving average
+func (info *ASEInformation) addPktToAvg(length int, unknown bool) {
+	if info.maxBw != 0 || unknown {
+		info.movAvg.add(length)
+	}
+}
+
 // addPktToAvg() adds the length of the packet in bytes to the moving average.
-func (info *ASEInformation) addPktToAvg(length int) {
+func (info *ASEInformation) addPktToAvg2(length int) {
 	info.movAvg.add(length)
 }

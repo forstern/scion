@@ -24,6 +24,7 @@ import (
 	"github.com/netsec-ethz/scion/go/border/rpkt"
 	"github.com/netsec-ethz/scion/go/lib/addr"
 	"github.com/netsec-ethz/scion/go/lib/common"
+	"time"
 )
 
 type BWEnforcer struct {
@@ -44,6 +45,8 @@ type IFEContainer struct {
 	maxIfBw int64
 	// usedIfBw holds the currently used BW by all reserved ASes.
 	usedIfBw int64
+	// tUsedIfBw is the time stamp at which the usedIfBw was last updated.
+	tUsedIfBw time.Time
 	//unknown holds the current average for unknown ASes.
 	unknown ASEInformation
 }
@@ -120,7 +123,7 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 		}
 	} else {
 		_, curAsBw := asInfo.getAvgs(true)
-		freeIfBw := ifec.maxIfBw - ifec.usedIfBw
+		freeIfBw := ifec.maxIfBw - ifec.getUsedIfBw()
 		// 0.75 * maxIFBw && (curAsBw < maxAsBw || curAsBw < freeIfBw )
 		flag := (curAsBw < (ifec.maxIfBw >> 1 + ifec.maxIfBw >> 2)) && (curAsBw < asInfo.maxBw || curAsBw < freeIfBw)
 		if flag {
@@ -134,14 +137,29 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 	return false
 }
 
+func (ifec *IFEContainer) getUsedIfBw() int64 {
+	eT := time.Since(ifec.tUsedIfBw)
+
+	if eT.Seconds() >= 5 {
+		usedIfBw := int64(0)
+		for _, avg := range ifec.avgs {
+			_, curBw := avg.getAvgs(false)
+			usedIfBw += curBw
+		}
+		ifec.tUsedIfBw = time.Now()
+	}
+
+	return ifec.usedIfBw
+}
+
 // getBWInfo() checks if there is a moving average for addr and returns it. If not it
 // returns the moving average for unknown ASes.
 func (ifec *IFEContainer) getBWInfo(addr addr.ISD_AS) ASEInformation {
 	info, exists := ifec.avgs[addr.Uint32()]
 	if exists {
-		return *info
+		return *info, true
 	}
-	return ifec.unknown
+	return ifec.unknown, false
 }
 
 // getAvg() returns the current moving average in bits.

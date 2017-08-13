@@ -113,14 +113,26 @@ func (ifec *IFEContainer) canForward2(isdas *addr.ISD_AS, length int) bool {
 // the AS exceeds its bandwidth limit.
 func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 	asInfo, exists := ifec.getBWInfo(*isdas)
+	labels := asInfo.Labels
+
 	if exists {
+		if asInfo.maxBw == 0 {
+			return false
+		}
+
 		oldAsBw, curAsBw := asInfo.getAvgs(false)
 		if curAsBw < asInfo.maxBw {
 			asInfo.addPktToAvg(length, false)
 			ifec.usedIfBw -= oldAsBw
 			ifec.usedIfBw += curAsBw
+			if curAsBw > asInfo.alertBW {
+				metrics.CurBwPerAs.With(labels).Set(float64(curAsBw))
+			}
 			return true
 		}
+
+		metrics.CurBwPerAs.With(labels).Set(float64(curAsBw))
+		metrics.PktsDropPerAs.With(labels).Inc()
 	} else {
 		_, curAsBw := asInfo.getAvgs(true)
 		freeIfBw := ifec.maxIfBw - ifec.getUsedIfBw()
@@ -131,9 +143,6 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 			return true
 		}
 	}
-
-	metrics.CurBwPerAs.With(labels).Set(float64(avg))
-	metrics.PktsDropPerAs.With(labels).Inc()
 	return false
 }
 
@@ -154,17 +163,12 @@ func (ifec *IFEContainer) getUsedIfBw() int64 {
 
 // getBWInfo() checks if there is a moving average for addr and returns it. If not it
 // returns the moving average for unknown ASes.
-func (ifec *IFEContainer) getBWInfo(addr addr.ISD_AS) ASEInformation {
+func (ifec *IFEContainer) getBWInfo(addr addr.ISD_AS) (ASEInformation, bool) {
 	info, exists := ifec.avgs[addr.Uint32()]
 	if exists {
 		return *info, true
 	}
 	return ifec.unknown, false
-}
-
-// getAvg() returns the current moving average in bits.
-func (info *ASEInformation) getAvg() int64 {
-	return info.movAvg.getAverage() * 8
 }
 
 func (info *ASEInformation) getAvgs(unknown bool) (int64, int64) {
@@ -181,9 +185,4 @@ func (info *ASEInformation) addPktToAvg(length int, unknown bool) {
 	if info.maxBw != 0 || unknown {
 		info.movAvg.add(length)
 	}
-}
-
-// addPktToAvg() adds the length of the packet in bytes to the moving average.
-func (info *ASEInformation) addPktToAvg2(length int) {
-	info.movAvg.add(length)
 }

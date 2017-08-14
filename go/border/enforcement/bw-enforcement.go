@@ -75,37 +75,6 @@ func (bwe *BWEnforcer) Check(rp *rpkt.RtrPkt) bool {
 
 // canForward() indicates whether a packet is allowed to pass the router. It is not if
 // the AS exceeds its bandwidth limit.
-func (ifec *IFEContainer) canForward2(isdas *addr.ISD_AS, length int) bool {
-	info := ifec.getBWInfo(*isdas)
-	labels := info.Labels
-
-	//If there is unlimited BW for an AS just forward the packet.
-	if info.maxBw == -1 {
-		return true
-	}
-
-	//If there is no BW assigned to an AS just drop the packet.
-	if info.maxBw == 0 {
-		return false
-	}
-
-	avg := info.getAvg()
-	if avg < info.maxBw {
-		info.addPktToAvg2(length)
-		if avg > info.alertBW {
-			metrics.CurBwPerAs.With(labels).Set(float64(avg))
-		}
-
-		return true
-	}
-
-	metrics.CurBwPerAs.With(labels).Set(float64(avg))
-	metrics.PktsDropPerAs.With(labels).Inc()
-	return false
-}
-
-// canForward() indicates whether a packet is allowed to pass the router. It is not if
-// the AS exceeds its bandwidth limit.
 func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 	asInfo, exists := ifec.getBWInfo(*isdas)
 	labels := asInfo.Labels

@@ -125,18 +125,18 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 		}
 
 		metrics.CurBwPerAs.With(labels).Set(float64(curAsBw))
-		metrics.PktsDropPerAs.With(labels).Inc()
 	} else {
 		curAsBw := asInfo.getAvg()
 		curIfBw := ifec.ifMovAvg.getAverage() * 8
 		freeIfBw := ifec.maxIfBw - curIfBw
 		// 0.75 * maxIFBw && (curAsBw < maxAsBw || curAsBw < freeIfBw )
-		flag := (curAsBw < (ifec.maxIfBw >> 1 + ifec.maxIfBw >> 2)) && (curAsBw < asInfo.maxBw || curAsBw < freeIfBw)
-		if flag {
+		if (curAsBw < (ifec.maxIfBw>>1 + ifec.maxIfBw>>2)) && (curAsBw < asInfo.maxBw || curAsBw < freeIfBw) {
 			asInfo.addPktToAvg(length)
 			return true
 		}
 	}
+
+	metrics.PktsDropPerAs.With(labels).Inc()
 	return false
 }
 

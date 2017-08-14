@@ -94,8 +94,8 @@ func (ifConfigs *IfConfigs) toEgressContainer() map[common.IFIDType]IFEContainer
 			container, reservedBW := mapToContainer(egressConfig, ifid, "egress")
 
 			if reservedBW > maxCapa {
-				log.Warn(fmt.Sprintf("For interface %d more egress capacity than available is reserved." +
-					" This can lead to unexpected behaviour." +
+				log.Warn(fmt.Sprintf("For interface %d more egress capacity than available is reserved."+
+					" This can lead to unexpected behaviour."+
 					" Reserved capacity: %d Max capacity: %d", ifid, reservedBW, maxCapa))
 			}
 
@@ -117,8 +117,8 @@ func (ifConfigs *IfConfigs) toIngressContainer() map[common.IFIDType]IFEContaine
 			container, reservedBW := mapToContainer(ingressConfig, ifid, "ingress")
 
 			if reservedBW > maxCapa {
-				log.Warn(fmt.Sprintf("For interface %d more ingress capacity than available is reserved." +
-					" This can lead to unexpected behaviour." +
+				log.Warn(fmt.Sprintf("For interface %d more ingress capacity than available is reserved."+
+					" This can lead to unexpected behaviour."+
 					" Reserved capacity: %d Max capacity: %d", ifid, reservedBW, maxCapa))
 			}
 

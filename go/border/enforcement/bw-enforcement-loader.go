@@ -100,6 +100,7 @@ func (ifConfigs *IfConfigs) toEgressContainer() map[common.IFIDType]IFEContainer
 			}
 
 			container.maxIfBw = maxCapa
+			container.ifMovAvg = NewMovingAverage(5, 1000*time.Millisecond)
 			containerMap[ifid] = container
 		}
 	}
@@ -122,6 +123,7 @@ func (ifConfigs *IfConfigs) toIngressContainer() map[common.IFIDType]IFEContaine
 			}
 
 			container.maxIfBw = maxCapa
+			container.ifMovAvg = NewMovingAverage(5, 1000*time.Millisecond)
 			containerMap[ifid] = container
 		}
 	}

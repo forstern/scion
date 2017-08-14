@@ -24,7 +24,6 @@ import (
 	"github.com/netsec-ethz/scion/go/border/rpkt"
 	"github.com/netsec-ethz/scion/go/lib/addr"
 	"github.com/netsec-ethz/scion/go/lib/common"
-	"time"
 )
 
 type BWEnforcer struct {
@@ -43,12 +42,10 @@ type IFEContainer struct {
 	// maxIfBw indicates the maximum bandwidth for the interface
 	// either ingress or egress
 	maxIfBw int64
-	// usedIfBw holds the currently used BW by all reserved ASes.
-	usedIfBw int64
-	// tUsedIfBw is the time stamp at which the usedIfBw was last updated.
-	tUsedIfBw time.Time
 	//unknown holds the current average for unknown ASes.
 	unknown ASEInformation
+	// ifMovAvg holds the current avg used by all reserved BW ASes.
+	ifMovAvg *MovingAverage
 }
 
 // ASEInformation contains all information necessary to do bandwidth
@@ -58,8 +55,6 @@ type ASEInformation struct {
 	maxBw int64
 	// alertBW indicates the bandwidth that is used for alerting. currently it is set to 95%.
 	alertBW int64
-	// curBw holds the current used BW of the AS.
-	curBw int64
 	// movAvg holds the current bandwidth average of the AS.
 	movAvg *MovingAverage
 	// Labels holds the prometheus labels of the AS.
@@ -119,12 +114,10 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 		if asInfo.maxBw == 0 {
 			return false
 		}
-
-		oldAsBw, curAsBw := asInfo.getAvgs(false)
+		curAsBw := asInfo.getAvg()
 		if curAsBw < asInfo.maxBw {
-			asInfo.addPktToAvg(length, false)
-			ifec.usedIfBw -= oldAsBw
-			ifec.usedIfBw += curAsBw
+			asInfo.addPktToAvg(length)
+			ifec.ifMovAvg.add(length)
 			if curAsBw > asInfo.alertBW {
 				metrics.CurBwPerAs.With(labels).Set(float64(curAsBw))
 			}
@@ -134,31 +127,17 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 		metrics.CurBwPerAs.With(labels).Set(float64(curAsBw))
 		metrics.PktsDropPerAs.With(labels).Inc()
 	} else {
-		_, curAsBw := asInfo.getAvgs(true)
-		freeIfBw := ifec.maxIfBw - ifec.getUsedIfBw()
+		curAsBw := asInfo.getAvg()
+		curIfBw := ifec.ifMovAvg.getAverage() * 8
+		freeIfBw := ifec.maxIfBw - curIfBw
 		// 0.75 * maxIFBw && (curAsBw < maxAsBw || curAsBw < freeIfBw )
 		flag := (curAsBw < (ifec.maxIfBw >> 1 + ifec.maxIfBw >> 2)) && (curAsBw < asInfo.maxBw || curAsBw < freeIfBw)
 		if flag {
-			asInfo.addPktToAvg(length, true)
+			asInfo.addPktToAvg(length)
 			return true
 		}
 	}
 	return false
-}
-
-func (ifec *IFEContainer) getUsedIfBw() int64 {
-	eT := time.Since(ifec.tUsedIfBw)
-
-	if eT.Seconds() >= 5 {
-		usedIfBw := int64(0)
-		for _, avg := range ifec.avgs {
-			_, curBw := avg.getAvgs(false)
-			usedIfBw += curBw
-		}
-		ifec.tUsedIfBw = time.Now()
-	}
-
-	return ifec.usedIfBw
 }
 
 // getBWInfo() checks if there is a moving average for addr and returns it. If not it
@@ -171,18 +150,11 @@ func (ifec *IFEContainer) getBWInfo(addr addr.ISD_AS) (ASEInformation, bool) {
 	return ifec.unknown, false
 }
 
-func (info *ASEInformation) getAvgs(unknown bool) (int64, int64) {
-	if !unknown && info.maxBw == 0 {
-		return 0, 0
-	}
-	oldBw := info.curBw
-	info.curBw = info.movAvg.getAverage() * 8
-	return oldBw, info.curBw
+func (info *ASEInformation) getAvg() int64 {
+	return info.movAvg.getAverage() * 8
 }
 
 // addPktToAvg() adds the packet to the moving average
-func (info *ASEInformation) addPktToAvg(length int, unknown bool) {
-	if info.maxBw != 0 || unknown {
-		info.movAvg.add(length)
-	}
+func (info *ASEInformation) addPktToAvg(length int) {
+	info.movAvg.add(length)
 }

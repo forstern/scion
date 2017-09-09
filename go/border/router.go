@@ -35,6 +35,8 @@ import (
 	"github.com/netsec-ethz/scion/go/lib/common"
 	"github.com/netsec-ethz/scion/go/lib/log"
 	"github.com/netsec-ethz/scion/go/lib/ringbuf"
+	"time"
+	"fmt"
 )
 
 var sighup chan os.Signal
@@ -151,20 +153,33 @@ func (r *Router) processPacket(rp *rpkt.RtrPkt) {
 		r.handlePktError(rp, err, "Error parsing packet")
 		return
 	}
+
+	strng := "unknown"
+	start := time.Now()
+
 	//Check that the packet does not belong to an AS that is exceeding its
 	// BW limitations.
 	if r.fBwEnf {
 		if r.ingressBWE.DoEnforcement &&
 			(rp.DirFrom == rcmn.DirExternal && (rp.DirTo == rcmn.DirLocal || rp.DirTo == rcmn.DirSelf ||
 				rp.DirTo == rcmn.DirExternal)) {
+			strng = "ingress"
 			if !r.ingressBWE.Check(rp) {
-				return
+				strng = "dropped"
 			}
 		} else if r.egresseBWE.DoEnforcement && (rp.DirFrom == rcmn.DirLocal && rp.DirTo == rcmn.DirExternal) {
+			strng = "egress"
 			if !r.egresseBWE.Check(rp) {
-				return
+				strng = "dropped"
 			}
 		}
+	}
+
+	el := time.Since(start)
+	fmt.Printf("%s %d\n", strng, el.Nanoseconds())
+
+	if strng == "dropped" {
+		return
 	}
 	// Validation looks for errors in the packet that didn't break basic
 	// parsing.

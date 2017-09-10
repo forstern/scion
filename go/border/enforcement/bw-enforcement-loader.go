@@ -117,6 +117,7 @@ func mapToContainer(config map[string]int64, ifid common.IFIDType, typ string) I
 
 	unknown := ASEInformation{
 		maxBw:  maxUnknownBW,
+		alertBW: (maxUnknownBW * 95) / 100,
 		movAvg: NewMovingAverage(5, 1000*time.Millisecond),
 		Labels: prometheus.Labels{"sock": fmt.Sprintf("intf:%d, as:%s", ifid, "unknown"), "type": typ},
 	}

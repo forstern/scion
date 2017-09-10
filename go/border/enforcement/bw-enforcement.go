@@ -81,6 +81,7 @@ func (ifec *IFEContainer) canForward(isdas *addr.ISD_AS, length int) bool {
 
 	//If there is no BW assigned to an AS just drop the packet.
 	if info.maxBw == 0 {
+		metrics.PktsDropPerAs.With(labels).Inc()
 		return false
 	}
 
